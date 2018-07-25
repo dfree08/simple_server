@@ -28,7 +28,7 @@ describe('Message', () => {
       // to watch it fail, uncomment the next line for a 2ms delay
       // for(let i=0; i<1000000; ++i);
 
-      expect(message.when).toBeCloseTo(new Date(), 1);
+      expect(message.when).toBeCloseTo(new Date(), 2);
     });
 
     it('was written by "Anonymous"', () => {
@@ -102,7 +102,7 @@ describe('Message', () => {
       message = new Message({author: 'alice', body: 'My dog has fleas.'});
       // normally messages set their own "when"
       // but for testing purposes only, we are forcing it to be a known date
-      message.when = new Date(2000, 10, 1, 11, 3, 4);
+      message.when = new Date(Date.UTC(2017, 10, 1, 11, 3, 4));
 
       json = JSON.stringify(message);
     });
@@ -113,7 +113,7 @@ describe('Message', () => {
       expect(json).toContain('"body":"My dog has fleas."');
     });
     it('contains a when field', () => {
-      expect(json).toContain('"when":"2000-11-01T15:03:04.000Z"');
+      expect(json).toContain('"when":"2017-11-01T11:03:04.000Z"');
     });
 
   })
@@ -147,16 +147,20 @@ describe('Room', () => {
     }).toThrow('room id must contain only lowercase letters');
   })
 
-  it('when constructed with a valid room id, makes a name based on that id', () => {
+  it('can be constructed with a valid room id', () => {
     room = new Room('debugging');
     expect(room.id).toEqual('debugging');
+  });
+
+  it('when constructed with a valid room id, makes a capitalized name based on that id', () => {
+    room = new Room('debugging');
     expect(room.name).toEqual('Debugging');
   });
 
-  it('when constructed with a room id and a name, uses that name', () => {
+  it('when constructed with a room id and a name, uses both id and name', () => {
     room = new Room('debugging', 'Debugging Help');
-    expect(room.id).toEqual('debugging');
     expect(room.name).toEqual('Debugging Help');
+    expect(room.id).toEqual('debugging');
   });
 
   describe('messaging', () => {
@@ -187,14 +191,14 @@ describe('Room', () => {
         let messages = room.messages;
         expect(messages[0]).toEqual(message);
       });
-
     });
 
     describe('after being sent several messages', () => {
-      let earlyMessage, lateMessage;
-      let nine_am = new Date(2000, 10, 1, 9, 0, 0);
-      let noon = new Date(2000, 10, 1, 12, 0, 0);
-      let six_pm = new Date(2000, 10, 1, 18, 0, 0);
+      let earlyMessage, lateMessage, laterMessage;
+      let nine_am = new Date(2017, 10, 1, 9, 0, 0);
+      let noon = new Date(2017, 10, 1, 12, 0, 0);
+      let six_pm = new Date(2017, 10, 1, 18, 0, 0);
+      let nine_pm = new Date(2017, 10, 1, 21, 0, 0);
 
       beforeEach(() => {
         // normally messages set their own "when"
@@ -208,27 +212,63 @@ describe('Room', () => {
         lateMessage.when = six_pm;
         room.sendMessage(lateMessage);
 
+        laterMessage = new Message({body: 'good night'});
+        laterMessage.when = nine_pm;
+        room.sendMessage(laterMessage);
+
       });
 
       it('has an updated message count', () => {
-        expect(room.messageCount()).toEqual(2);
+        expect(room.messageCount()).toEqual(3);
       });
 
-      it('contains both messages in its list of messages', () => {
+      it('contains all messages in its list of messages', () => {
         expect(room.messages[0]).toEqual(earlyMessage);
         expect(room.messages[1]).toEqual(lateMessage);
-      });
-
-      it('has an updated message count', () => {
-        expect(room.messageCount()).toEqual(2);
+        expect(room.messages[2]).toEqual(laterMessage);
       });
 
       it('can return only messages since a certain moment', () => {
         let messages = room.messagesSince(noon);
-        expect(messages).toContain(lateMessage);
         expect(messages).not.toContain(earlyMessage);
+        expect(messages).toContain(lateMessage);
+        expect(messages).toContain(laterMessage);
       });
     });
+  });
+});
+
+const House = require('./lib/house.js');
+describe('House', () => {
+
+  let house;
+
+  beforeEach(() => {
+    house = new House();
+  });
+
+  it('creates a room when asked for it', () => {
+    let room = house.roomWithId('general');
+    expect(room instanceof Room).toBe(true);
+  });
+
+  it('reuses an existing room when asked for it twice', ()=>{
+    let hello = new Message({body: 'hello'});
+
+    let room = house.roomWithId('general');
+    room.sendMessage(hello);
+
+    let roomAgain = house.roomWithId('general');
+    expect(roomAgain.messages).toContain(hello);
+  });
+
+  it('can send a message to a room directly too', ()=>{
+
+    house.sendMessageToRoom('general', {body: 'hello'});
+
+    let room = house.roomWithId('general');
+    expect(room.messages.length).toEqual(1);
+    expect(room.messages[0].body).toEqual('hello');
   });
 
 });
